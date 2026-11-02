@@ -1,20 +1,38 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { getStoredUserId } from "@/lib/api";
 
 export default function Home() {
-  const router = useRouter();
-
   useEffect(() => {
-    const userId = getStoredUserId();
-    if (userId) {
-      router.replace("/dashboard");
-    } else {
-      router.replace("/onboarding");
+    const raw =
+      typeof window !== "undefined"
+        ? localStorage.getItem("student_profile") ||
+          localStorage.getItem("study_buddy_profile")
+        : null;
+
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && (parsed.full_name || parsed.id)) {
+          window.location.href = "/dashboard";
+          return;
+        }
+      } catch {}
     }
-  }, [router]);
+
+    const studentId =
+      typeof window !== "undefined"
+        ? localStorage.getItem("student_id") ||
+          localStorage.getItem("study_buddy_user_id")
+        : null;
+
+    if (studentId) {
+      window.location.href = "/dashboard";
+      return;
+    }
+
+    window.location.href = "/login";
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#0A191E] flex items-center justify-center">

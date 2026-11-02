@@ -2,7 +2,9 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { saveProfile, setStoredUserId, setStoredProfile } from "@/lib/api";
+import { STREAM_CATEGORIES, DEFAULT_STREAM } from "@/lib/streams";
 import {
   Sparkles,
   GraduationCap,
@@ -16,31 +18,6 @@ import {
   Zap,
 } from "lucide-react";
 
-const STREAMS_OPTIONS = [
-  "Class 6 Secondary",
-  "Class 7 Secondary",
-  "Class 8 Secondary",
-  "Class 9 Secondary",
-  "Class 10 Foundation / Boards",
-  "Class 11 Science (PCM)",
-  "Class 11 Science (PCB)",
-  "Class 11 Commerce",
-  "Class 11 Arts / Humanities",
-  "Class 12 Science (PCM)",
-  "Class 12 Science (PCB)",
-  "Class 12 Commerce",
-  "Class 12 Arts / Humanities",
-  "UG 1st Year B.Tech / Engineering",
-  "UG 2nd Year B.Tech / Engineering",
-  "UG 3rd Year B.Tech / Engineering",
-  "UG 1st Year MBBS / Medical",
-  "UG 2nd Year MBBS / Medical",
-  "UG 3rd Year MBBS / Medical",
-  "UG B.Com / Finance",
-  "UG BBA / Management",
-  "UG BA / Arts & Social Sciences",
-];
-
 export default function OnboardingPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -49,7 +26,7 @@ export default function OnboardingPage() {
   // Form states
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
-  const [gradeStream, setGradeStream] = useState(STREAMS_OPTIONS[9]); // Class 11 Science (PCM)
+  const [gradeStream, setGradeStream] = useState(DEFAULT_STREAM);
   const [focusSpan, setFocusSpan] = useState(45);
   const [schoolStart, setSchoolStart] = useState("08:00");
   const [schoolEnd, setSchoolEnd] = useState("14:30");
@@ -58,7 +35,8 @@ export default function OnboardingPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName.trim()) {
+    const name = fullName.trim();
+    if (!name) {
       setError("Please enter your full name.");
       return;
     }
@@ -66,9 +44,28 @@ export default function OnboardingPage() {
     setLoading(true);
     setError(null);
 
+    // Prepare profileData immediately
+    const userProfile = {
+      id: `user-${Date.now().toString(36)}`,
+      full_name: name,
+      email: email.trim(),
+      grade_stream: gradeStream,
+      focus_span_minutes: Number(focusSpan),
+      school_start_time: schoolStart,
+      school_end_time: schoolEnd,
+      sleep_start_time: sleepStart,
+      peak_energy: peakEnergy,
+    };
+
+    // 1. Immediately persist to localStorage
+    localStorage.setItem("student_profile", JSON.stringify(userProfile));
+    localStorage.setItem("student_id", userProfile.id || "shlok");
+    setStoredProfile(userProfile);
+
+    // 2. Safe non-blocking API call to persist to SQLite backend
     try {
-      const res = await saveProfile({
-        full_name: fullName.trim(),
+      saveProfile({
+        full_name: name,
         email: email.trim(),
         grade_stream: gradeStream,
         focus_span_minutes: Number(focusSpan),
@@ -76,20 +73,21 @@ export default function OnboardingPage() {
         school_end_time: schoolEnd,
         sleep_start_time: sleepStart,
         peak_energy: peakEnergy,
+      }).then((res) => {
+        if (res?.profile) {
+          localStorage.setItem("student_profile", JSON.stringify(res.profile));
+          localStorage.setItem("student_id", res.user_id || "shlok");
+          setStoredProfile(res.profile);
+        }
+      }).catch((err) => {
+        console.warn("Background onboarding save notice:", err);
       });
-
-      // Store authenticated dynamic identity
-      setStoredUserId(res.user_id);
-      setStoredProfile(res.profile);
-
-      // Redirect directly to dashboard
-      router.push("/dashboard");
-    } catch (err: any) {
-      console.error("Onboarding error:", err);
-      setError(err.message || "Failed to complete onboarding. Please try again.");
-    } finally {
-      setLoading(false);
+    } catch (err) {
+      console.warn("Direct saveProfile error ignored for instant navigation", err);
     }
+
+    // 3. Immediately execute navigation with zero delay!
+    window.location.href = "/dashboard";
   };
 
   return (
@@ -158,10 +156,14 @@ export default function OnboardingPage() {
                 onChange={(e) => setGradeStream(e.target.value)}
                 className="mt-1 w-full px-3.5 py-2.5 rounded-xl text-xs bg-[#13232C] border border-[#1E333D] text-white focus:ring-1 focus:ring-teal-500 font-medium"
               >
-                {STREAMS_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
+                {STREAM_CATEGORIES.map((cat) => (
+                  <optgroup key={cat.category} label={cat.category} className="bg-[#0F172A] text-teal-400 font-bold">
+                    {cat.options.map((opt) => (
+                      <option key={opt} value={opt} className="bg-[#13232C] text-white font-normal">
+                        {opt}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
             </div>
@@ -271,6 +273,18 @@ export default function OnboardingPage() {
               </>
             )}
           </button>
+
+          <div className="text-center pt-2 border-t border-[#1E333D]">
+            <p className="text-xs text-gray-400">
+              Already have a profile?{" "}
+              <Link
+                href="/login"
+                className="font-bold text-teal-400 hover:text-teal-300 underline underline-offset-2"
+              >
+                Sign in to existing account
+              </Link>
+            </p>
+          </div>
         </form>
       </div>
     </div>

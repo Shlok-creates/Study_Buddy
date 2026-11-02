@@ -1,8 +1,83 @@
 import json
 from sqlmodel import Session, select
-from models import SkillNode, StudyRoom
+from models import SkillNode, StudyRoom, StudySquad, SquadMember, SquadFeedItem, UserProfile, PlannerTask
+from datetime import datetime, timedelta
 
 def seed_database(session: Session):
+    # Check if StudySquad is seeded
+    existing_squad = session.exec(select(StudySquad)).first()
+    if not existing_squad:
+        print("Seeding default StudySquad and peer community...")
+        squad = StudySquad(
+            name="Alpha Study Squad",
+            invite_code="ALPHA-2026",
+            created_by="peer-scholar-01",
+            description="Collaborative sprint pod for daily focus and competitive revision.",
+            member_count=4
+        )
+        session.add(squad)
+        session.commit()
+        session.refresh(squad)
+
+        peers = [
+            {"id": "peer-scholar-01", "name": "Ananya Sharma", "stream": "Class 12 Science", "xp": 2450, "level": 5},
+            {"id": "peer-scholar-02", "name": "Rohan Mehta", "stream": "UG 1st Year B.Tech", "xp": 1850, "level": 4},
+            {"id": "peer-scholar-03", "name": "Priya Verma", "stream": "Class 11 Medical", "xp": 1350, "level": 3},
+            {"id": "peer-scholar-04", "name": "Kabir Sen", "stream": "Class 12 Commerce", "xp": 950, "level": 2},
+        ]
+
+        for p in peers:
+            user = session.get(UserProfile, p["id"])
+            if not user:
+                session.add(UserProfile(
+                    id=p["id"],
+                    full_name=p["name"],
+                    grade_stream=p["stream"],
+                    xp=p["xp"],
+                    level=p["level"],
+                    badges_json='["Novice Scholar", "Academic Pathfinder"]'
+                ))
+            session.add(SquadMember(
+                squad_id=squad.id,
+                student_id=p["id"],
+                student_name=p["name"]
+            ))
+
+        # Add initial feed milestones
+        feed_events = [
+            {
+                "student_id": "peer-scholar-01",
+                "student_name": "Ananya Sharma",
+                "type": "streak_milestone",
+                "msg": "🔥 Ananya Sharma completed a 12-day study streak across Calculus & Physics!",
+                "reactions": '{"🔥": 8, "👏": 12, "🎯": 4}'
+            },
+            {
+                "student_id": "peer-scholar-02",
+                "student_name": "Rohan Mehta",
+                "type": "level_up",
+                "msg": "🎉 Rohan Mehta reached Level 4 (Syllabus Conqueror)! Mastered Binary Search Trees.",
+                "reactions": '{"🔥": 5, "👏": 9, "🎯": 2}'
+            },
+            {
+                "student_id": "peer-scholar-03",
+                "student_name": "Priya Verma",
+                "type": "task_completed",
+                "msg": "🎯 Priya Verma finished study sprint: \"NEET Biology: DNA Replication & Helicase Activity\".",
+                "reactions": '{"🔥": 4, "👏": 7, "🎯": 1}'
+            }
+        ]
+        for fe in feed_events:
+            session.add(SquadFeedItem(
+                squad_id=squad.id,
+                student_id=fe["student_id"],
+                student_name=fe["student_name"],
+                event_type=fe["type"],
+                message=fe["msg"],
+                reactions_json=fe["reactions"]
+            ))
+        session.commit()
+
     # Check if SkillNodes are already seeded
     existing_node = session.exec(select(SkillNode)).first()
     if existing_node:

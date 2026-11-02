@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import AppShell from "@/components/AppShell";
 import AudioPlayer from "@/components/AudioPlayer";
-import { explainTeacherNotes } from "@/lib/api";
+import { explainTeacherNotes, getStoredProfile } from "@/lib/api";
+import { STREAM_CATEGORIES, DEFAULT_STREAM } from "@/lib/streams";
 import {
   GraduationCap,
   Sparkles,
@@ -28,13 +29,19 @@ though linear momentum is still conserved.`;
 export default function TeacherPage() {
   const [file, setFile] = useState<File | null>(null);
   const [textNotes, setTextNotes] = useState(SAMPLE_NOTES);
-  const [studentGrade, setStudentGrade] = useState("Class 11");
-  const [studentStream, setStudentStream] = useState("Science");
+  const [selectedStream, setSelectedStream] = useState<string>(DEFAULT_STREAM);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [activeMode, setActiveMode] = useState<"read" | "voice">("read");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    const prof = getStoredProfile();
+    if (prof?.grade_stream) {
+      setSelectedStream(prof.grade_stream);
+    }
+  }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -64,9 +71,9 @@ export default function TeacherPage() {
     if (textNotes.trim()) {
       formData.append("text_content", textNotes.trim());
     }
-    formData.append("student_grade", studentGrade);
-    formData.append("student_stream", studentStream);
-    formData.append("grade_stream", `${studentGrade} ${studentStream}`);
+    formData.append("student_grade", selectedStream.split(" ")[0]);
+    formData.append("student_stream", selectedStream);
+    formData.append("grade_stream", selectedStream);
 
     try {
       const data = await explainTeacherNotes(formData);
@@ -108,42 +115,25 @@ export default function TeacherPage() {
         <div className="p-6 rounded-3xl bg-white dark:bg-[#0F172A] border border-gray-200 dark:border-[#1E333D] shadow-sm space-y-4">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="grid grid-cols-2 gap-3 w-full sm:w-auto">
-                <div>
-                  <label className="text-xs font-semibold text-gray-600 dark:text-gray-300">Grade Level:</label>
-                  <select
-                    value={studentGrade}
-                    onChange={(e) => setStudentGrade(e.target.value)}
-                    className="mt-1 w-full px-3 py-1.5 rounded-xl text-xs bg-gray-50 dark:bg-[#13232C] border border-gray-200 dark:border-[#1E333D] text-gray-900 dark:text-white font-medium"
-                  >
-                    <option value="Class 6">Class 6</option>
-                    <option value="Class 7">Class 7</option>
-                    <option value="Class 8">Class 8</option>
-                    <option value="Class 9">Class 9</option>
-                    <option value="Class 10">Class 10</option>
-                    <option value="Class 11">Class 11</option>
-                    <option value="Class 12">Class 12</option>
-                    <option value="UG 1st Year">UG 1st Year</option>
-                    <option value="UG 2nd Year">UG 2nd Year</option>
-                    <option value="UG 3rd Year">UG 3rd Year</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-gray-600 dark:text-gray-300">Academic Stream:</label>
-                  <select
-                    value={studentStream}
-                    onChange={(e) => setStudentStream(e.target.value)}
-                    className="mt-1 w-full px-3 py-1.5 rounded-xl text-xs bg-gray-50 dark:bg-[#13232C] border border-gray-200 dark:border-[#1E333D] text-gray-900 dark:text-white font-medium"
-                  >
-                    <option value="Science">Science (PCM/PCB)</option>
-                    <option value="Commerce">Commerce & Accounting</option>
-                    <option value="Arts">Arts & Humanities</option>
-                    <option value="Engineering">Engineering / Tech</option>
-                    <option value="Medical">Medical / MBBS</option>
-                    <option value="Management">Management / BBA</option>
-                  </select>
-                </div>
+              <div className="w-full sm:w-80">
+                <label className="text-xs font-semibold text-gray-600 dark:text-gray-300">
+                  Target Academic Stream / Level:
+                </label>
+                <select
+                  value={selectedStream}
+                  onChange={(e) => setSelectedStream(e.target.value)}
+                  className="mt-1 w-full px-3 py-2 rounded-xl text-xs bg-gray-50 dark:bg-[#13232C] border border-gray-200 dark:border-[#1E333D] text-gray-900 dark:text-white font-medium focus:ring-1 focus:ring-teal-500"
+                >
+                  {STREAM_CATEGORIES.map((cat) => (
+                    <optgroup key={cat.category} label={`── ${cat.category} ──`}>
+                      {cat.streams.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
               </div>
 
               <button

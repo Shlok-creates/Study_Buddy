@@ -5,8 +5,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session, select
 from database import get_session
-from models import UserProfile, PlannerTask
+from models import UserProfile, PlannerTask, SquadMember, SquadFeedItem
 from services.groq_service import generate_planner_roadmap
+from services.gamification_service import classify_topic_subject, award_xp
 
 router = APIRouter(prefix="/api", tags=["Planner & Onboarding"])
 
@@ -14,12 +15,15 @@ class ProfileUpdateRequest(BaseModel):
     id: Optional[str] = None
     full_name: Optional[str] = "Student"
     email: Optional[str] = ""
-    grade_stream: str = "Class 11 Science"
+    grade_stream: str = "Class 11-12 Science (PCM/JEE)"
     focus_span_minutes: int = 45
     school_start_time: str = "08:00"
     school_end_time: str = "15:00"
     sleep_start_time: str = "23:00"
     peak_energy: str = "Late Night"
+
+class StudentLoginRequest(BaseModel):
+    identifier: str # Email or Full Name
 
 class GenerateRoadmapRequest(BaseModel):
     student_id: str
@@ -34,11 +38,52 @@ class ToggleTaskRequest(BaseModel):
 def get_user_profile(student_id: str, session: Session = Depends(get_session)):
     profile = session.exec(select(UserProfile).where(UserProfile.id == student_id)).first()
     if not profile:
-        profile = UserProfile(id=student_id, full_name="Scholar")
+        raise HTTPException(
+            status_code=404,
+            detail="Student profile not found. Please complete onboarding or log in."
+        )
+    return profile
+
+@router.post("/onboarding/login")
+def login_student_profile(req: StudentLoginRequest, session: Session = Depends(get_session)):
+    ident = req.identifier.strip()
+    if not ident:
+        raise HTTPException(status_code=400, detail="Please enter your email or full name to log in.")
+    
+    # 1. First search by exact match or substring
+    profile = session.exec(
+        select(UserProfile).where(
+            (UserProfile.email.ilike(ident)) |
+            (UserProfile.full_name.ilike(ident)) |
+            (UserProfile.email.ilike(f"%{ident}%")) |
+            (UserProfile.full_name.ilike(f"%{ident}%"))
+        )
+    ).first()
+
+    # 2. Safety: If not found, immediately create profile so demo/submission is never blocked
+    if not profile:
+        clean_name = ident.split("@")[0].strip().title()
+        user_id = f"user-{uuid.uuid4().hex[:12]}"
+        profile = UserProfile(
+            id=user_id,
+            full_name=clean_name,
+            email=ident if "@" in ident else "",
+            grade_stream="UG 1st Year B.Tech / Engineering",
+            focus_span_minutes=45,
+            school_start_time="08:00",
+            school_end_time="14:30",
+            sleep_start_time="23:30",
+            peak_energy="Late Night"
+        )
         session.add(profile)
         session.commit()
         session.refresh(profile)
-    return profile
+
+    return {
+        "message": f"Welcome back, {profile.full_name}!",
+        "user_id": profile.id,
+        "profile": profile
+    }
 
 @router.post("/onboarding/profile")
 def save_or_update_profile(req: ProfileUpdateRequest, session: Session = Depends(get_session)):
@@ -136,10 +181,12 @@ def generate_schedule(req: GenerateRoadmapRequest, session: Session = Depends(ge
             topic_name = raw_topic
 
         duration = int(item.get("duration_minutes") or profile_dict.get("focus_span_minutes", 45))
+        subject = item.get("subject") or classify_topic_subject(topic_name)
 
         task = PlannerTask(
             student_id=req.student_id,
             topic_name=topic_name,
+            subject=subject,
             scheduled_date=scheduled_date,
             duration_minutes=duration,
             is_completed=False,
@@ -192,15 +239,53 @@ def toggle_task_status(task_id: int, req: Optional[ToggleTaskRequest] = None, se
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
 
+    old_status = task.is_completed
     if req and req.is_completed is not None:
-        task.is_completed = req.is_completed
+        new_status = req.is_completed
     else:
-        task.is_completed = not task.is_completed
+        new_status = not old_status
 
+    task.is_completed = new_status
     session.add(task)
     session.commit()
     session.refresh(task)
-    return {"message": "Task updated", "task": task}
+
+    gamification_res = None
+    if new_status and not old_status:
+        # Task was completed -> Award +50 XP
+        gamification_res = award_xp(session, task.student_id, 50, f"Completed: {task.topic_name}")
+        
+        # Broadcast to squads if student is a squad member
+        try:
+            profile = session.get(UserProfile, task.student_id)
+            student_name = profile.full_name if profile else "Scholar"
+            squad_memberships = session.exec(
+                select(SquadMember).where(SquadMember.student_id == task.student_id)
+            ).all()
+            for sm in squad_memberships:
+                feed = SquadFeedItem(
+                    squad_id=sm.squad_id,
+                    student_id=task.student_id,
+                    student_name=student_name,
+                    event_type="task_completed",
+                    message=f"🎯 {student_name} finished study task: \"{task.topic_name}\"",
+                    reactions_json='{"🔥": 0, "👏": 1, "🎯": 0}'
+                )
+                session.add(feed)
+            if squad_memberships:
+                session.commit()
+        except Exception as e:
+            print(f"[Squad Broadcast Notice] {e}")
+
+    elif not new_status and old_status:
+        # Task was uncompleted -> Deduct 50 XP
+        gamification_res = award_xp(session, task.student_id, -50, "Uncompleted task")
+
+    return {
+        "message": "Task updated",
+        "task": task,
+        "gamification": gamification_res
+    }
 
 @router.get("/planner/analytics/{student_id}")
 def get_planner_analytics(student_id: str, session: Session = Depends(get_session)):

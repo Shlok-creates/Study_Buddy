@@ -9,7 +9,7 @@ from database import init_db, engine
 from seed_data import seed_database
 from sqlmodel import Session
 
-from routers import planner, doubts, youtube, teacher, skills
+from routers import planner, doubts, youtube, teacher, skills, analytics, squads, leaderboard, counsellor
 
 # Create upload directories if not already created
 BASE_DIR = Path(__file__).resolve().parent
@@ -51,6 +51,10 @@ app.include_router(doubts.router)
 app.include_router(youtube.router)
 app.include_router(teacher.router)
 app.include_router(skills.router)
+app.include_router(analytics.router)
+app.include_router(squads.router)
+app.include_router(leaderboard.router)
+app.include_router(counsellor.router)
 
 @app.get("/")
 def root():

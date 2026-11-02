@@ -22,7 +22,7 @@ export default function SkillTreeModal({
   const [scorePercentage, setScorePercentage] = useState(0);
   const [correctTotal, setCorrectTotal] = useState(0);
 
-  if (!isOpen) return null;
+  if (!isOpen || !node || !node.is_unlocked) return null;
 
   const quiz: QuizQuestion[] = node.quiz || [];
   const totalQuestions = quiz.length;

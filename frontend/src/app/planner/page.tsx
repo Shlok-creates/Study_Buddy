@@ -10,9 +10,12 @@ import {
   rescheduleBacklogs,
   toggleTask,
   getStoredUserId,
+  getStoredProfile,
+  setStoredProfile,
   PlannerTask,
   UserProfile,
 } from "@/lib/api";
+import { STREAM_CATEGORIES, DEFAULT_STREAM } from "@/lib/streams";
 import {
   CalendarDays,
   Sparkles,
@@ -39,7 +42,8 @@ export default function PlannerPage() {
   });
   const [dailyHours, setDailyHours] = useState(2.0);
 
-  // Bio-clock settings
+  // Bio-clock & academic settings
+  const [gradeStream, setGradeStream] = useState<string>(DEFAULT_STREAM);
   const [focusSpan, setFocusSpan] = useState(45);
   const [peakEnergy, setPeakEnergy] = useState("Late Night");
   const [schoolStart, setSchoolStart] = useState("08:00");
@@ -67,6 +71,9 @@ export default function PlannerPage() {
         setPeakEnergy(p.peak_energy);
         setSchoolStart(p.school_start_time);
         setSchoolEnd(p.school_end_time);
+        if (p.grade_stream) {
+          setGradeStream(p.grade_stream);
+        }
       }
     } catch (err) {
       console.error("Failed to load planner data", err);
@@ -107,12 +114,25 @@ export default function PlannerPage() {
     try {
       await saveProfile({
         id: userId,
+        grade_stream: gradeStream,
         focus_span_minutes: Number(focusSpan),
         peak_energy: peakEnergy,
         school_start_time: schoolStart,
         school_end_time: schoolEnd,
       });
-      setMessage("Chronobiology profile updated successfully!");
+      if (profile) {
+        const updated = {
+          ...profile,
+          grade_stream: gradeStream,
+          focus_span_minutes: Number(focusSpan),
+          peak_energy: peakEnergy,
+          school_start_time: schoolStart,
+          school_end_time: schoolEnd,
+        };
+        setStoredProfile(updated);
+        setProfile(updated);
+      }
+      setMessage("Chronobiology & academic preferences saved successfully!");
       setShowConfig(false);
       await loadData();
     } catch (err) {
@@ -169,8 +189,13 @@ export default function PlannerPage() {
               <Sparkles className="w-4 h-4 text-salmon-500" />
               <span>Chronobiology & Adaptive Optimization Engine</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-white mt-1">
-              Adaptive Study Planner
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-white mt-1 flex flex-wrap items-center gap-2">
+              <span>Adaptive Study Planner</span>
+              {(profile?.grade_stream || gradeStream) && (
+                <span className="text-xs font-bold px-2.5 py-1 rounded-xl bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 border border-teal-500/20">
+                  {profile?.grade_stream || gradeStream}
+                </span>
+              )}
             </h1>
             <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1 max-w-2xl">
               Dynamically maps syllabi into progressive daily study sprints based on your attention span, school schedule, and peak cognitive energy hours.
@@ -210,55 +235,78 @@ export default function PlannerPage() {
             <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-[#1E333D]">
               <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
                 <Zap className="w-4 h-4 text-salmon-500" />
-                Customize Chronobiology Profile
+                Customize Chronobiology & Academic Profile
               </h3>
               <span className="text-xs text-gray-400">Used by AI to schedule sprints</span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+            <div className="space-y-4">
               <div>
-                <label className="text-xs font-medium text-gray-500">Focus Span (Mins):</label>
+                <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                  Target Academic Stream / Level:
+                </label>
                 <select
-                  value={focusSpan}
-                  onChange={(e) => setFocusSpan(Number(e.target.value))}
-                  className="mt-1 w-full px-3 py-2 rounded-xl text-xs bg-gray-50 dark:bg-[#13232C] border border-gray-200 dark:border-[#1E333D] text-gray-900 dark:text-white"
+                  value={gradeStream}
+                  onChange={(e) => setGradeStream(e.target.value)}
+                  className="mt-1 w-full px-3.5 py-2 rounded-xl text-xs bg-gray-50 dark:bg-[#13232C] border border-gray-200 dark:border-[#1E333D] text-gray-900 dark:text-white font-medium focus:ring-1 focus:ring-teal-500"
                 >
-                  <option value={25}>25 mins (Pomodoro)</option>
-                  <option value={45}>45 mins (Recommended)</option>
-                  <option value={60}>60 mins (Deep Flow)</option>
+                  {STREAM_CATEGORIES.map((cat) => (
+                    <optgroup key={cat.category} label={`── ${cat.category} ──`}>
+                      {cat.streams.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
                 </select>
               </div>
 
-              <div>
-                <label className="text-xs font-medium text-gray-500">Peak Energy Window:</label>
-                <select
-                  value={peakEnergy}
-                  onChange={(e) => setPeakEnergy(e.target.value)}
-                  className="mt-1 w-full px-3 py-2 rounded-xl text-xs bg-gray-50 dark:bg-[#13232C] border border-gray-200 dark:border-[#1E333D] text-gray-900 dark:text-white"
-                >
-                  <option value="Morning">Morning Peak (05:00 - 11:00)</option>
-                  <option value="Late Night">Late Night Peak (21:00 - 01:00)</option>
-                </select>
-              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                <div>
+                  <label className="text-xs font-medium text-gray-500">Focus Span (Mins):</label>
+                  <select
+                    value={focusSpan}
+                    onChange={(e) => setFocusSpan(Number(e.target.value))}
+                    className="mt-1 w-full px-3 py-2 rounded-xl text-xs bg-gray-50 dark:bg-[#13232C] border border-gray-200 dark:border-[#1E333D] text-gray-900 dark:text-white"
+                  >
+                    <option value={25}>25 mins (Pomodoro)</option>
+                    <option value={45}>45 mins (Recommended)</option>
+                    <option value={60}>60 mins (Deep Flow)</option>
+                  </select>
+                </div>
 
-              <div>
-                <label className="text-xs font-medium text-gray-500">School/College Start:</label>
-                <input
-                  type="time"
-                  value={schoolStart}
-                  onChange={(e) => setSchoolStart(e.target.value)}
-                  className="mt-1 w-full px-3 py-2 rounded-xl text-xs bg-gray-50 dark:bg-[#13232C] border border-gray-200 dark:border-[#1E333D] text-gray-900 dark:text-white"
-                />
-              </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-500">Peak Energy Window:</label>
+                  <select
+                    value={peakEnergy}
+                    onChange={(e) => setPeakEnergy(e.target.value)}
+                    className="mt-1 w-full px-3 py-2 rounded-xl text-xs bg-gray-50 dark:bg-[#13232C] border border-gray-200 dark:border-[#1E333D] text-gray-900 dark:text-white"
+                  >
+                    <option value="Morning">Morning Peak (05:00 - 11:00)</option>
+                    <option value="Late Night">Late Night Peak (21:00 - 01:00)</option>
+                  </select>
+                </div>
 
-              <div>
-                <label className="text-xs font-medium text-gray-500">School/College End:</label>
-                <input
-                  type="time"
-                  value={schoolEnd}
-                  onChange={(e) => setSchoolEnd(e.target.value)}
-                  className="mt-1 w-full px-3 py-2 rounded-xl text-xs bg-gray-50 dark:bg-[#13232C] border border-gray-200 dark:border-[#1E333D] text-gray-900 dark:text-white"
-                />
+                <div>
+                  <label className="text-xs font-medium text-gray-500">School/College Start:</label>
+                  <input
+                    type="time"
+                    value={schoolStart}
+                    onChange={(e) => setSchoolStart(e.target.value)}
+                    className="mt-1 w-full px-3 py-2 rounded-xl text-xs bg-gray-50 dark:bg-[#13232C] border border-gray-200 dark:border-[#1E333D] text-gray-900 dark:text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-medium text-gray-500">School/College End:</label>
+                  <input
+                    type="time"
+                    value={schoolEnd}
+                    onChange={(e) => setSchoolEnd(e.target.value)}
+                    className="mt-1 w-full px-3 py-2 rounded-xl text-xs bg-gray-50 dark:bg-[#13232C] border border-gray-200 dark:border-[#1E333D] text-gray-900 dark:text-white"
+                  />
+                </div>
               </div>
             </div>
 

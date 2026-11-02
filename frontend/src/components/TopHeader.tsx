@@ -58,7 +58,7 @@ export default function TopHeader({ profile, streakDays = 7 }: TopHeaderProps) {
         <div className="hidden md:flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-[#13232C] border border-gray-200 dark:border-[#1E333D] text-xs">
           <GraduationCap className="w-4 h-4 text-teal-600 dark:text-teal-400" />
           <span className="font-semibold text-gray-700 dark:text-gray-200">
-            {profile?.grade_stream || "Class 11 Science (PCM)"}
+            {profile?.grade_stream || "UG 1st Year B.Tech / Engineering"}
           </span>
           <span className="text-gray-400">•</span>
           <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1">

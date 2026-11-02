@@ -60,7 +60,9 @@ export default function SkillTreePage() {
     try {
       setLoading(true);
       const items = await fetchSkillTree(track);
-      setNodes(items);
+      // Strictly sort by level_order ascending
+      const sorted = [...items].sort((a, b) => a.level_order - b.level_order);
+      setNodes(sorted);
     } catch (err) {
       console.error("Tree load error:", err);
     } finally {
@@ -68,15 +70,30 @@ export default function SkillTreePage() {
     }
   };
 
+  const handleNodeClick = (node: SkillNodeItem) => {
+    if (!node.is_unlocked) {
+      setBannerMessage(
+        `🔒 Level ${node.level_order} ("${node.title}") is locked. Complete Level ${node.level_order - 1} with >= 80% score to unlock!`
+      );
+      return;
+    }
+    setActiveModalNode(node);
+  };
+
   const handleScoreSubmit = async (nodeId: string, percentage: number) => {
     try {
       const res = await submitSkillQuiz(nodeId, percentage);
       setBannerMessage(res.message);
-      await loadTree(selectedTrack);
+      // Immediately re-fetch and update local state so the UI reflects unlocked green status
+      const updated = await fetchSkillTree(selectedTrack);
+      const sorted = [...updated].sort((a, b) => a.level_order - b.level_order);
+      setNodes(sorted);
     } catch (err) {
       console.error("Submit quiz error:", err);
     }
   };
+
+  const sortedNodes = [...nodes].sort((a, b) => a.level_order - b.level_order);
 
   return (
     <AppShell>
@@ -92,7 +109,7 @@ export default function SkillTreePage() {
               Gamified Skill Trees & Pods
             </h1>
             <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1 max-w-2xl">
-              Progress through circular mastery nodes. Complete level-gate quizzes with 80%+ score to unlock the subsequent tier and climb the peer study pod ranks.
+              Progress sequentially through circular mastery nodes. Complete level-gate quizzes with 80%+ score to unlock the subsequent tier and climb the peer study pod ranks.
             </p>
           </div>
 
@@ -117,16 +134,16 @@ export default function SkillTreePage() {
           </div>
         </div>
 
-        {/* Banner Alert on unlock */}
+        {/* Banner Alert on unlock or locked attempt */}
         {bannerMessage && (
-          <div className="p-4 rounded-2xl bg-teal-500/10 border border-teal-500/30 text-teal-600 dark:text-teal-400 text-sm font-semibold flex items-center justify-between">
+          <div className="p-4 rounded-2xl bg-teal-500/10 border border-teal-500/30 text-teal-600 dark:text-teal-400 text-sm font-semibold flex items-center justify-between animate-fade-in">
             <div className="flex items-center gap-2">
-              <Award className="w-5 h-5 text-salmon-500" />
+              <Award className="w-5 h-5 text-salmon-500 flex-shrink-0" />
               <span>{bannerMessage}</span>
             </div>
             <button
               onClick={() => setBannerMessage(null)}
-              className="text-xs underline text-gray-400 hover:text-gray-600"
+              className="text-xs underline text-gray-400 hover:text-gray-600 dark:hover:text-white ml-2 flex-shrink-0"
             >
               Dismiss
             </button>
@@ -148,7 +165,7 @@ export default function SkillTreePage() {
                 </h3>
               </div>
               <div className="text-xs font-mono px-3 py-1 rounded-full bg-teal-500/10 text-teal-600 dark:text-teal-400 font-bold">
-                {nodes.filter((n) => n.is_unlocked).length} / {nodes.length} Unlocked
+                {sortedNodes.filter((n) => n.is_completed).length} Mastered • {sortedNodes.filter((n) => n.is_unlocked).length} / {sortedNodes.length} Unlocked
               </div>
             </div>
 
@@ -157,8 +174,9 @@ export default function SkillTreePage() {
               {/* Connecting background vertical winding line */}
               <div className="absolute top-8 bottom-8 w-1.5 bg-gradient-to-b from-teal-500 via-teal-600 to-gray-300 dark:to-gray-700 rounded-full z-0" />
 
-              {nodes.map((node, index) => {
+              {sortedNodes.map((node, index) => {
                 const isUnlocked = node.is_unlocked;
+                const isCompleted = Boolean(node.is_completed);
                 // Alternate subtle left/right offset for Duolingo winding feel
                 const xOffset = index % 2 === 0 ? "-translate-x-6 sm:-translate-x-12" : "translate-x-6 sm:translate-x-12";
 
@@ -169,16 +187,25 @@ export default function SkillTreePage() {
                   >
                     {/* Circular Node Button */}
                     <button
-                      onClick={() => setActiveModalNode(node)}
-                      className={`w-20 h-20 rounded-full flex flex-col items-center justify-center font-bold shadow-xl transition-all duration-300 transform active:scale-95 group relative ${
-                        isUnlocked
-                          ? "bg-teal-600 hover:bg-teal-500 text-white shadow-teal-600/40 border-4 border-teal-400 ring-4 ring-teal-500/20 hover:scale-105"
-                          : "bg-gray-200 dark:bg-[#1E333D] text-gray-400 border-4 border-gray-300 dark:border-gray-700 cursor-pointer hover:border-gray-400"
+                      type="button"
+                      onClick={() => handleNodeClick(node)}
+                      title={isUnlocked ? `Open Level ${node.level_order} Assessment` : `Locked (Complete Level ${node.level_order - 1} first)`}
+                      className={`w-20 h-20 rounded-full flex flex-col items-center justify-center font-bold shadow-xl transition-all duration-300 transform group relative ${
+                        isCompleted
+                          ? "bg-teal-600 hover:bg-teal-500 text-white border-4 border-teal-300 ring-4 ring-teal-500/30 hover:scale-105"
+                          : isUnlocked
+                          ? "bg-salmon-500 hover:bg-salmon-600 text-white shadow-salmon-500/40 border-4 border-salmon-300 ring-4 ring-salmon-500/30 hover:scale-105 active:scale-95"
+                          : "bg-gray-200 dark:bg-[#1E333D] text-gray-400 border-4 border-gray-300 dark:border-gray-700 cursor-not-allowed opacity-60"
                       }`}
                     >
-                      {isUnlocked ? (
+                      {isCompleted ? (
                         <>
-                          <Unlock className="w-6 h-6 text-salmon-400 transition-transform group-hover:rotate-12" />
+                          <CheckCircle2 className="w-6 h-6 text-white transition-transform group-hover:scale-110" />
+                          <span className="text-[10px] font-extrabold mt-0.5 uppercase tracking-wide">Mastered</span>
+                        </>
+                      ) : isUnlocked ? (
+                        <>
+                          <Unlock className="w-6 h-6 text-white transition-transform group-hover:rotate-12" />
                           <span className="text-[11px] font-extrabold mt-0.5">Lvl {node.level_order}</span>
                         </>
                       ) : (
@@ -188,25 +215,31 @@ export default function SkillTreePage() {
                         </>
                       )}
 
-                      {/* Glowing halo for unlocked current frontier */}
-                      {isUnlocked && (
-                        <div className="absolute -inset-1 rounded-full bg-teal-400/20 animate-ping -z-10" />
+                      {/* Glowing halo for unlocked frontier node */}
+                      {isUnlocked && !isCompleted && (
+                        <div className="absolute -inset-1.5 rounded-full bg-salmon-400/30 animate-pulse -z-10" />
                       )}
                     </button>
 
                     {/* Node Title Card */}
                     <div
-                      onClick={() => setActiveModalNode(node)}
-                      className={`mt-2.5 px-3 py-1.5 rounded-xl text-center max-w-[200px] cursor-pointer transition-colors border ${
+                      onClick={() => handleNodeClick(node)}
+                      className={`mt-2.5 px-3 py-1.5 rounded-xl text-center max-w-[200px] transition-colors border ${
                         isUnlocked
-                          ? "bg-teal-50 dark:bg-[#0A2328] border-teal-200 dark:border-teal-800 text-gray-900 dark:text-gray-100"
-                          : "bg-gray-100 dark:bg-[#13232C] border-gray-200 dark:border-[#1E333D] text-gray-400"
+                          ? "bg-teal-50 dark:bg-[#0A2328] border-teal-200 dark:border-teal-800 text-gray-900 dark:text-gray-100 cursor-pointer hover:border-teal-400"
+                          : "bg-gray-100 dark:bg-[#13232C] border-gray-200 dark:border-[#1E333D] text-gray-400 cursor-not-allowed opacity-70"
                       }`}
                     >
-                      <div className="text-xs font-bold truncate">{node.title}</div>
+                      <div className="text-xs font-bold truncate">
+                        {isCompleted && "✓ "}Level {node.level_order}: {node.title}
+                      </div>
                       <div className="text-[10px] text-gray-400 flex items-center justify-center gap-1 mt-0.5">
                         <span>{node.quiz?.length || 10} Questions</span>
-                        <ChevronRight className="w-3 h-3 text-teal-500" />
+                        {isUnlocked ? (
+                          <ChevronRight className="w-3 h-3 text-teal-500" />
+                        ) : (
+                          <Lock className="w-2.5 h-2.5 text-gray-400" />
+                        )}
                       </div>
                     </div>
                   </div>
@@ -225,7 +258,7 @@ export default function SkillTreePage() {
         </div>
 
         {/* Modal for Level-Unlock Quiz */}
-        {activeModalNode && (
+        {activeModalNode && activeModalNode.is_unlocked && (
           <SkillTreeModal
             node={activeModalNode}
             isOpen={Boolean(activeModalNode)}
@@ -237,4 +270,3 @@ export default function SkillTreePage() {
     </AppShell>
   );
 }
-

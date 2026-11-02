@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from "react";
 import AppShell from "@/components/AppShell";
 import Flashcard3D from "@/components/Flashcard3D";
 import { snapSolveDoubt, fetchFlashcards, getStoredUserId, FlashcardSetItem } from "@/lib/api";
+import { STREAM_CATEGORIES, DEFAULT_STREAM } from "@/lib/streams";
 import {
   Camera,
   Sparkles,
@@ -19,7 +20,7 @@ import {
 export default function DoubtsPage() {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [gradeStream, setGradeStream] = useState("Class 11 Science");
+  const [gradeStream, setGradeStream] = useState(DEFAULT_STREAM);
   const [loading, setLoading] = useState(false);
   const [resultData, setResultData] = useState<any>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -163,14 +164,17 @@ export default function DoubtsPage() {
                 <select
                   value={gradeStream}
                   onChange={(e) => setGradeStream(e.target.value)}
-                  className="px-3 py-1.5 rounded-xl text-xs bg-gray-50 dark:bg-[#13232C] border border-gray-200 dark:border-[#1E333D] text-gray-900 dark:text-white font-medium focus:ring-1 focus:ring-teal-500"
+                  className="px-3 py-1.5 rounded-xl text-xs bg-gray-50 dark:bg-[#13232C] border border-gray-200 dark:border-[#1E333D] text-gray-900 dark:text-white font-medium focus:ring-1 focus:ring-teal-500 max-w-xs"
                 >
-                  <option value="Class 11 Science (PCB / NEET)">Class 11 Science (PCB / NEET)</option>
-                  <option value="Class 11 Science (PCM / JEE)">Class 11 Science (PCM / JEE)</option>
-                  <option value="Class 12 Science">Class 12 Science</option>
-                  <option value="UG 1st Year B.Tech / CS">UG 1st Year B.Tech / CS</option>
-                  <option value="UG Medical / MBBS">UG Medical / MBBS</option>
-                  <option value="UG Commerce / Accounts">UG Commerce / Accounts</option>
+                  {STREAM_CATEGORIES.map((cat) => (
+                    <optgroup key={cat.category} label={cat.category} className="bg-white dark:bg-[#0F172A] font-bold text-teal-600 dark:text-teal-400">
+                      {cat.options.map((opt) => (
+                        <option key={opt} value={opt} className="text-gray-900 dark:text-gray-100 font-normal">
+                          {opt}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
                 </select>
               </div>
 

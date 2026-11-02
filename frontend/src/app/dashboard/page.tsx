@@ -3,16 +3,21 @@
 import React, { useState, useEffect } from "react";
 import AppShell from "@/components/AppShell";
 import ActivityHeatmap from "@/components/ActivityHeatmap";
+import SubjectProgressGraph from "@/components/SubjectProgressGraph";
 import {
   fetchTasks,
   fetchAnalytics,
   fetchProfile,
+  fetchSubjectProgress,
   toggleTask,
   rescheduleBacklogs,
   getStoredUserId,
+  getStoredProfile,
+  setStoredProfile,
   PlannerTask,
   AnalyticsData,
   UserProfile,
+  SubjectProgressData,
 } from "@/lib/api";
 import {
   CalendarCheck,
@@ -32,28 +37,35 @@ export default function DashboardPage() {
   const [tasks, setTasks] = useState<PlannerTask[]>([]);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [subjectProgress, setSubjectProgress] = useState<SubjectProgressData | null>(null);
+  const [loading, setLoading] = useState(false);
   const [rescheduling, setRescheduling] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   const loadAllData = async () => {
-    const userId = getStoredUserId();
-    if (!userId) return;
+    // 1. Immediately read cached student_profile from localStorage
+    const local = getStoredProfile();
+    if (local) {
+      setProfile(local);
+    }
+    const userId = getStoredUserId() || local?.id || "shlok";
 
     try {
-      setLoading(true);
-      const [tList, anal, prof] = await Promise.all([
-        fetchTasks(userId),
-        fetchAnalytics(userId),
-        fetchProfile(userId),
+      const [tList, anal, prof, subjData] = await Promise.all([
+        fetchTasks(userId).catch(() => []),
+        fetchAnalytics(userId).catch(() => null),
+        fetchProfile(userId).catch(() => null),
+        fetchSubjectProgress(userId).catch(() => null),
       ]);
-      setTasks(tList);
-      setAnalytics(anal);
-      setProfile(prof);
+      if (tList && tList.length > 0) setTasks(tList);
+      if (anal) setAnalytics(anal);
+      if (prof) {
+        setProfile(prof);
+        setStoredProfile(prof);
+      }
+      if (subjData) setSubjectProgress(subjData);
     } catch (err) {
-      console.error("Dashboard data load error:", err);
-    } finally {
-      setLoading(false);
+      console.warn("Dashboard non-blocking sync notice:", err);
     }
   };
 
@@ -64,23 +76,67 @@ export default function DashboardPage() {
   const handleToggle = async (task: PlannerTask) => {
     const userId = getStoredUserId();
     const nextCompleted = !task.is_completed;
+    
+    // 1. Optimistic Tasks update
     setTasks((prev) =>
       prev.map((t) => (t.id === task.id ? { ...t, is_completed: nextCompleted } : t))
     );
 
+    // 2. Optimistic Subject Progress update
+    if (subjectProgress) {
+      const taskSubj = task.subject || "General Academic";
+      setSubjectProgress((prev) => {
+        if (!prev) return prev;
+        const delta = nextCompleted ? 1 : -1;
+        const updatedSubjects = prev.subjects.map((s) => {
+          if (s.subject === taskSubj || s.subject.toLowerCase() === taskSubj.toLowerCase()) {
+            const newComp = Math.max(0, s.completed_tasks + delta);
+            const newPct = s.total_tasks > 0 ? roundOne((newComp / s.total_tasks) * 100) : 0;
+            return {
+              ...s,
+              completed_tasks: newComp,
+              remaining_tasks: Math.max(0, s.total_tasks - newComp),
+              completion_percentage: newPct,
+              today_completed: Math.max(0, s.today_completed + delta),
+              today_percentage: s.today_total > 0 ? roundOne(((s.today_completed + delta) / s.today_total) * 100) : 0,
+            };
+          }
+          return s;
+        });
+
+        const newTodayComp = Math.max(0, prev.total_today_completed + delta);
+        return {
+          ...prev,
+          total_today_completed: newTodayComp,
+          overall_today_percentage: prev.total_today_tasks > 0 ? roundOne((newTodayComp / prev.total_today_tasks) * 100) : 0,
+          subjects: updatedSubjects,
+        };
+      });
+    }
+
     try {
-      await toggleTask(task.id, nextCompleted);
+      const res = await toggleTask(task.id, nextCompleted);
       if (userId) {
-        const updatedAnal = await fetchAnalytics(userId);
+        const [updatedAnal, updatedSubj] = await Promise.all([
+          fetchAnalytics(userId),
+          fetchSubjectProgress(userId),
+        ]);
         setAnalytics(updatedAnal);
+        setSubjectProgress(updatedSubj);
       }
     } catch (err) {
       console.error("Failed to toggle task status", err);
+      // Revert optimistic updates on error
       setTasks((prev) =>
         prev.map((t) => (t.id === task.id ? { ...t, is_completed: task.is_completed } : t))
       );
+      if (userId) {
+        fetchSubjectProgress(userId).then(setSubjectProgress).catch(() => {});
+      }
     }
   };
+
+  const roundOne = (val: number) => Math.round(val * 10) / 10;
 
   const handleReschedule = async () => {
     const userId = getStoredUserId();
@@ -118,14 +174,14 @@ export default function DashboardPage() {
                 Chronobiology Engine Active
               </span>
               <span className="text-teal-200 text-xs">
-                Peak Energy: <strong>{profile?.peak_energy || "Late Night"}</strong>
+                Stream: <strong>{profile?.grade_stream || "UG 1st Year B.Tech / Engineering"}</strong>
               </span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-              Welcome back, {profile?.full_name?.split(" ")[0] || "Scholar"}!
+              Welcome back, {profile?.full_name?.split(" ")[0] || profile?.full_name || "shlok"}!
             </h1>
             <p className="text-teal-100 text-xs sm:text-sm max-w-xl">
-              Your personalized cognitive study roadmap is adjusted to your {profile?.focus_span_minutes || 45}-minute attention span and school schedule.
+              Studying <strong>{profile?.grade_stream || "UG 1st Year B.Tech"}</strong> with an optimized {profile?.focus_span_minutes || 45}-minute attention span and {profile?.peak_energy || "Late Night"} peak energy schedule.
             </p>
           </div>
 
@@ -200,6 +256,9 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+
+        {/* Real-Time Subject Progress Graph Component */}
+        <SubjectProgressGraph data={subjectProgress} loading={loading} />
 
         {/* Consistency Activity Heatmap Component */}
         <ActivityHeatmap heatmapData={analytics?.heatmap || {}} daysToShow={42} />

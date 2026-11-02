@@ -283,3 +283,351 @@ Study Notes:
         "When you understand each small piece and how they connect, the whole picture becomes second nature. "
         "Take it one step at a time, test your recall with flashcards, and you will master this in no time."
     )
+
+
+def advise_career_counsellor(
+    student_profile: Dict[str, Any],
+    subject_performance: Dict[str, Any],
+    stream_track: str,
+    user_query: str
+) -> Dict[str, Any]:
+    """
+    Generate dynamic, profile-fit career & academic counselling using Groq LLM.
+    Returns:
+    - socratic_advice: Empathetic, personalized mentor guidance
+    - career_matches: 3 top career pathways
+    - target_exams: Competitive exams and eligibility criteria
+    - dual_strategy: Tier-1 Plan A vs. Realistic high-ROI Plan B options
+    - actionable_tasks: Exactly 3 immediate tasks for the Adaptive Planner
+    """
+    grade = student_profile.get("grade_stream", "Class 11 Science")
+    focus_span = student_profile.get("focus_span_minutes", 45)
+    peak_energy = student_profile.get("peak_energy", "Late Night")
+    subjects_summary = ", ".join([
+        f"{s.get('subject')}: {s.get('completion_percentage', 0)}% completion ({s.get('completed_tasks', 0)}/{s.get('total_tasks', 0)} tasks)"
+        for s in subject_performance.get("subjects", [])[:4]
+    ]) or "General syllabus in progress"
+
+    prompt = f"""You are a Principal Academic & Career Strategist counselling a student.
+Student Profile:
+- Current Stream/Grade: {grade}
+- Chronobiology Focus Span: {focus_span} minutes
+- Peak Energy: {peak_energy}
+- Subject Performance: {subjects_summary}
+- Target Track: {stream_track} (Technology, Medical, or Management)
+- Student's Question: "{user_query}"
+
+Provide elite, realistic, pragmatic counseling tailored directly to Indian/global academic trajectories (Class 6 through UG 3rd Year).
+Rules:
+1. Ground advice in the student's actual study data and grade level.
+2. Formulate a pragmatic Dual Strategy: A bold Tier-1 Plan A (e.g. IIT/AIIMS/IIM) paired with an equally rewarding, high-ROI Plan B backup option (e.g. BITSAT, State CET, IIIT, Top B-Schools, Biotech/FinTech).
+3. Provide EXACTLY 3 immediate, concrete, actionable study tasks formatted for addition into their daily adaptive study planner.
+4. Output strictly a valid JSON object matching this schema:
+{{
+  "socratic_advice": "Detailed, encouraging, pragmatic counseling text...",
+  "career_matches": [
+    {{
+      "title": "Specific Career Role Title",
+      "domain": "{stream_track}",
+      "fit_reason": "Why their profile and habits align...",
+      "salary_outlook": "e.g. ₹15L - ₹35L / year or Global Equivalent",
+      "required_skills": ["Skill 1", "Skill 2", "Skill 3"]
+    }}
+  ],
+  "target_exams": [
+    {{
+      "name": "Exam Name (e.g., JEE Main/Adv, BITSAT, NEET-UG, IPMAT, CUET)",
+      "eligibility": "Eligibility criteria...",
+      "exam_period": "Typical month/timeline...",
+      "difficulty_tier": "Tier-1 Competitive"
+    }}
+  ],
+  "dual_strategy": {{
+    "plan_a": {{
+      "title": "Tier-1 Dream Trajectory",
+      "target_institutes": "e.g. Top IITs / AIIMS / IIMs",
+      "strategy_summary": "Core execution strategy for Plan A..."
+    }},
+    "plan_b": {{
+      "title": "High-ROI Pragmatic Backup Trajectory",
+      "target_institutes": "e.g. Top State Colleges / Specialized Tech & FinTech Degrees",
+      "roi_advantage": "Why this route is outstanding with minimal career friction...",
+      "strategy_summary": "Parallel preparation strategy..."
+    }}
+  }},
+  "actionable_tasks": [
+    {{
+      "topic_name": "{stream_track} Focus: Specific Actionable Milestone",
+      "subject": "Mathematics / Physics / Chemistry / Biology / Computer Science / Economics",
+      "duration_minutes": {focus_span},
+      "priority": "High"
+    }},
+    {{
+      "topic_name": "{stream_track} Focus: Second Actionable Milestone",
+      "subject": "Core Subject",
+      "duration_minutes": {focus_span},
+      "priority": "High"
+    }},
+    {{
+      "topic_name": "{stream_track} Focus: Third Actionable Milestone",
+      "subject": "Core Subject",
+      "duration_minutes": {focus_span},
+      "priority": "Medium"
+    }}
+  ]
+}}
+"""
+
+    for model_name in [MODEL_REASONING_PRIMARY, MODEL_REASONING_BACKUP]:
+        try:
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.3,
+                max_tokens=3000,
+                response_format={"type": "json_object"}
+            )
+            content = response.choices[0].message.content
+            parsed = clean_json_response(content)
+            if isinstance(parsed, dict) and "career_matches" in parsed:
+                return parsed
+        except Exception as e:
+            print(f"[Counsellor Groq Error ({model_name})] {e}")
+            continue
+
+    # Fallback response tailored to stream_track
+    if stream_track == "Tech":
+        return {
+            "socratic_advice": f"As a {grade} student aiming for Technology, your focus should be balanced between deep conceptual understanding in Mathematics/Physics and practical computational thinking. Rather than relying solely on high-pressure single-exam outcomes, cultivate strong foundational problem solving.",
+            "career_matches": [
+                {
+                    "title": "Full-Stack AI & Cloud Systems Architect",
+                    "domain": "Technology",
+                    "fit_reason": "High demand for engineers who master both low-level algorithmic logic and scalable cloud infrastructure.",
+                    "salary_outlook": "₹16L - ₹45L / year",
+                    "required_skills": ["Python / C++", "Distributed Systems", "Cloud Architecture", "Data Structures"]
+                },
+                {
+                    "title": "Machine Learning Research Engineer",
+                    "domain": "Artificial Intelligence",
+                    "fit_reason": "Strong mathematical intuition in Linear Algebra, Calculus, and Probability directly unlocks modern LLM architectures.",
+                    "salary_outlook": "₹20L - ₹55L / year",
+                    "required_skills": ["PyTorch", "Calculus & Probability", "Model Optimization", "Deep Learning"]
+                },
+                {
+                    "title": "Cybersecurity & Systems Specialist",
+                    "domain": "Information Security",
+                    "fit_reason": "Rapidly growing field with immense global shortage of elite defensive security analysts.",
+                    "salary_outlook": "₹14L - ₹38L / year",
+                    "required_skills": ["Network Protocols", "Linux Kernel", "Cryptography", "Penetration Testing"]
+                }
+            ],
+            "target_exams": [
+                {
+                    "name": "JEE Main & Advanced",
+                    "eligibility": "Class 12 with Physics, Chemistry, Mathematics (PCM) with >= 75%",
+                    "exam_period": "January (Session 1), April (Session 2), May (Advanced)",
+                    "difficulty_tier": "Tier-1 Premier"
+                },
+                {
+                    "name": "BITSAT",
+                    "eligibility": "Class 12 PCM with minimum 75% aggregate",
+                    "exam_period": "May & June (2 Sessions)",
+                    "difficulty_tier": "Tier-1 High-ROI"
+                },
+                {
+                    "name": "State Engineering CETs (MHT-CET, WBJEE, KCET, COMEDK)",
+                    "eligibility": "Class 12 PCM with state domicile / open merit",
+                    "exam_period": "April - May",
+                    "difficulty_tier": "Tier-2 State & Regional"
+                }
+            ],
+            "dual_strategy": {
+                "plan_a": {
+                    "title": "Tier-1 Dream: IITs, NITs & BITS Pilani (Computer Science / Electrical)",
+                    "target_institutes": "IIT Bombay, IIT Delhi, IIT Madras, BITS Pilani, NIT Trichy",
+                    "strategy_summary": "Dedicate 70% of study sprints to rigorous MCQ time-trials and previous 10-year JEE questions."
+                },
+                "plan_b": {
+                    "title": "High-ROI Specialized Route: Top IIITs, Premier State Colleges & Open-Source Portfolio",
+                    "target_institutes": "IIIT Hyderabad, DA-IICT, COEP Pune, Jadavpur University, RVCE",
+                    "roi_advantage": "Equal campus placement packages at 1/2 the fee overhead, with heavy emphasis on hackathons and GitHub portfolios.",
+                    "strategy_summary": "Target BITSAT and State CETs while actively building 2 portfolio projects on GitHub."
+                }
+            },
+            "actionable_tasks": [
+                {
+                    "topic_name": "Tech Roadmap: Solve 10 JEE-Level Coordinate Geometry & Vector Problems",
+                    "subject": "Mathematics",
+                    "duration_minutes": focus_span,
+                    "priority": "High"
+                },
+                {
+                    "topic_name": "Tech Roadmap: Master Binary Search & Two-Pointer DSA in C++ / Python",
+                    "subject": "Computer Science",
+                    "duration_minutes": focus_span,
+                    "priority": "High"
+                },
+                {
+                    "topic_name": "Tech Roadmap: Complete Electrostatics Field & Potential Derivation Sprints",
+                    "subject": "Physics",
+                    "duration_minutes": focus_span,
+                    "priority": "Medium"
+                }
+            ]
+        }
+    elif stream_track == "Medical":
+        return {
+            "socratic_advice": f"In Healthcare & Medical Sciences, consistency and active recall are your greatest competitive advantages. Because NCERT mastery accounts for over 85% of NEET-UG questions, pairing high-frequency spaced repetition with clinical problem solving guarantees retention without burnout.",
+            "career_matches": [
+                {
+                    "title": "MBBS Physician & Clinical Specialist",
+                    "domain": "Healthcare",
+                    "fit_reason": "Classic high-impact clinical practice with lifetime prestige and societal contribution.",
+                    "salary_outlook": "₹12L - ₹35L / year (Post-MD ₹30L - ₹80L+)",
+                    "required_skills": ["Clinical Diagnostics", "Patient Care", "Pathology", "Pharmacology"]
+                },
+                {
+                    "title": "Biotechnology & Genetic Engineering Researcher",
+                    "domain": "Allied Medical Sciences",
+                    "fit_reason": "High-growth global field developing gene therapies, mRNA vaccines, and synthetic biology.",
+                    "salary_outlook": "₹10L - ₹32L / year (Global $80k - $140k)",
+                    "required_skills": ["CRISPR / Gene Editing", "Molecular Biology", "Bioprocess Engineering"]
+                },
+                {
+                    "title": "Biomedical Systems & Diagnostic Tech Innovator",
+                    "domain": "Medical Tech",
+                    "fit_reason": "Combines human biology with robotics and modern medical devices (MRI, robotic surgery).",
+                    "salary_outlook": "₹14L - ₹40L / year",
+                    "required_skills": ["Bio-Instrumentation", "Signal Processing", "Anatomy", "Medical AI"]
+                }
+            ],
+            "target_exams": [
+                {
+                    "name": "NEET-UG (National Eligibility cum Entrance Test)",
+                    "eligibility": "Class 12 with Physics, Chemistry, Biology (PCB) with >= 50% aggregate",
+                    "exam_period": "First Sunday of May",
+                    "difficulty_tier": "Tier-1 National Mandatory"
+                },
+                {
+                    "name": "CUET-UG (Central Universities Entrance Test - Life Sciences)",
+                    "eligibility": "Class 12 PCB for B.Sc Biotech, Biochemistry, Microbiology",
+                    "exam_period": "May - June",
+                    "difficulty_tier": "Tier-2 Allied Sciences"
+                }
+            ],
+            "dual_strategy": {
+                "plan_a": {
+                    "title": "Government Medical College MBBS (AIIMS / State GMCs)",
+                    "target_institutes": "AIIMS New Delhi, JIPMER, Maulana Azad Medical College, CMC Vellore",
+                    "strategy_summary": "Score 650+ in NEET-UG through 100% line-by-line mastery of NCERT Biology and rapid Chemistry numericals."
+                },
+                "plan_b": {
+                    "title": "High-ROI Allied Health & Biotech Frontiers (BDS, BAMS, Biotech, Biomedical)",
+                    "target_institutes": "Top State Dental Colleges, IISERs, BITS Pilani (Biotech), Manipal Life Sciences",
+                    "roi_advantage": "Faster transition to high-paying clinical research, health-tech startups, and European/US graduate programs.",
+                    "strategy_summary": "Keep CUET Life Sciences and premier private biotech programs as high-ROI parallel options."
+                }
+            },
+            "actionable_tasks": [
+                {
+                    "topic_name": "Medical Roadmap: Active Recall of 50 NCERT Genetics & Molecular Biology Flashcards",
+                    "subject": "Biology",
+                    "duration_minutes": focus_span,
+                    "priority": "High"
+                },
+                {
+                    "topic_name": "Medical Roadmap: Solve 25 Organic Chemistry Reaction Mechanism Numericals",
+                    "subject": "Chemistry",
+                    "duration_minutes": focus_span,
+                    "priority": "High"
+                },
+                {
+                    "topic_name": "Medical Roadmap: Practice Optics & Ray Diagrams Speed Drills",
+                    "subject": "Physics",
+                    "duration_minutes": focus_span,
+                    "priority": "Medium"
+                }
+            ]
+        }
+    else: # Management / Commerce
+        return {
+            "socratic_advice": f"For Management & Commerce, analytical aptitude paired with clear strategic communication sets the top 1% apart. Entrance exams like IPMAT and CUET reward speed in Quantitative Aptitude, Logical Reasoning, and Reading Comprehension.",
+            "career_matches": [
+                {
+                    "title": "Investment Banking & Corporate Finance Analyst",
+                    "domain": "Finance",
+                    "fit_reason": "High-octane financial modeling, mergers & acquisitions, and public equity valuation.",
+                    "salary_outlook": "₹18L - ₹50L / year",
+                    "required_skills": ["Financial Modeling", "Excel & Python", "Valuation", "Accounting"]
+                },
+                {
+                    "title": "Technology Product Manager (PM)",
+                    "domain": "Product Management",
+                    "fit_reason": "Cross-functional leadership driving software features, user metrics, and business strategy.",
+                    "salary_outlook": "₹16L - ₹42L / year",
+                    "required_skills": ["User Empathy", "Data Analytics", "Agile Roadmap", "Go-To-Market"]
+                },
+                {
+                    "title": "Management Consultant & Strategic Advisor",
+                    "domain": "Consulting",
+                    "fit_reason": "Solving core operational challenges for Fortune 500 leadership using hypothesis-driven problem solving.",
+                    "salary_outlook": "₹18L - ₹45L / year",
+                    "required_skills": ["Case Solving", "Data Storytelling", "Market Sizing", "Strategy"]
+                }
+            ],
+            "target_exams": [
+                {
+                    "name": "IPMAT (IIM Indore / Rohtak / Ranchi / Bodh Gaya / Jammu)",
+                    "eligibility": "Class 12 with minimum 60% aggregate (any stream)",
+                    "exam_period": "May",
+                    "difficulty_tier": "Tier-1 5-Year Integrated Dual Degree (BBA+MBA)"
+                },
+                {
+                    "name": "CUET-UG (Delhi University - SRCC, SSCBS, Hindu College)",
+                    "eligibility": "Class 12 for B.Com (Hons), BMS, BBA-FIA",
+                    "exam_period": "May - June",
+                    "difficulty_tier": "Tier-1 Premier Central Universities"
+                },
+                {
+                    "name": "NPAT / SET / IPMAT Ranchi (Top Private B-Schools)",
+                    "eligibility": "Class 12 with minimum 50-60%",
+                    "exam_period": "March - May",
+                    "difficulty_tier": "Tier-2 Top B-Schools"
+                }
+            ],
+            "dual_strategy": {
+                "plan_a": {
+                    "title": "IIM 5-Year Dual Degree (IPMAT Indore) or SRCC / SSCBS Delhi",
+                    "target_institutes": "IIM Indore, IIM Rohtak, SRCC Delhi, Shaheed Sukhdev College of Business Studies (SSCBS)",
+                    "strategy_summary": "Master High-Speed Quantitative Aptitude and Data Interpretation with daily timed sectional mocks."
+                },
+                "plan_b": {
+                    "title": "High-ROI FinTech & Applied Management Route (NMIMS, Christ, St. Xavier's + CFA Foundation)",
+                    "target_institutes": "NMIMS Mumbai, Christ University Bangalore, St. Xavier's Kolkata, Symbiosis",
+                    "roi_advantage": "Direct entry to Mumbai / Bangalore corporate hubs with early internship exposure and CFA / FRM credentials.",
+                    "strategy_summary": "Prepare for CUET and NPAT while building business case study and Excel financial modeling skills."
+                }
+            },
+            "actionable_tasks": [
+                {
+                    "topic_name": "Management Roadmap: Solve 15 IPMAT Higher Math & P&C / Probability Drills",
+                    "subject": "Mathematics",
+                    "duration_minutes": focus_span,
+                    "priority": "High"
+                },
+                {
+                    "topic_name": "Management Roadmap: Solve 2 Editorial Reading Comprehension & Critical Reasoning Passages",
+                    "subject": "Economics/Management",
+                    "duration_minutes": focus_span,
+                    "priority": "High"
+                },
+                {
+                    "topic_name": "Management Roadmap: Master Cash Flow & Balance Sheet Financial Ratios",
+                    "subject": "Economics/Management",
+                    "duration_minutes": focus_span,
+                    "priority": "Medium"
+                }
+            ]
+        }
+
